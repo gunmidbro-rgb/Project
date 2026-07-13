@@ -1,28 +1,43 @@
 import zipfile
 import tarfile
 import pandas as pd
+import os
 
-def extract_zip(zip_path,output):
-    with zipfile.ZipFile(zip_path, 'r') as zip:
-        inner_file_name = 'amazon_review_polarity_csv.tgz'
-        zip.extract(inner_file_name, path=output)
-    
-def extract_tgz(tgz_path,output):
-    with tarfile.open(tgz_path, 'r:gz') as tgz:
-        tgz.extractall(path=output)
+class DataExtract:
+    def __init__(self,base_folder: str = 'data/raw'):
+        self.base_folder = base_folder
+        self.zip_path = os.path.join(base_folder,'amazon_review_polarity_csv.tgz.zip')
+        self.tgz_path = os.path.join(base_folder,'amazon_review_polarity_csv.tgz')
+        self.extracted_folder = os.path.join(base_folder,'amazon_review_polarity_csv')
+        self.source_csv = os.path.join(self.extracted_folder, 'test.csv')
+        self.output_sample_csv = os.path.join(self.extracted_folder, 'sample.csv')
 
-def get_sample(file_path,output):
-    sample = pd.read_csv(file_path,nrows=50000,header=None)
-    sample.to_csv(output,index=False,header=None)
+    def extract_zip(self):
+        print('Extracting zip')
+        with zipfile.ZipFile(self.zip_path, 'r') as zip:
+            inner_file_name = 'amazon_review_polarity_csv.tgz'
+            zip.extract(inner_file_name, path=self.base_folder)
+        print('Successful')
 
-def main():
-    zip_path = 'data/raw/amazon_review_polarity_csv.tgz.zip'
-    extract_to_path = 'data/raw/'
-    tgz_path = 'data/raw/amazon_review_polarity_csv.tgz'
-    extract_zip(zip_path,extract_to_path)
-    extract_tgz(tgz_path,extract_to_path)
-    test = 'data/raw/amazon_review_polarity_csv/test.csv'
-    get_sample(test,'data/raw/amazon_review_polarity_csv/sample.csv')
+    def extract_tgz(self):
+        print('Extracting tgz')
+        with tarfile.open(self.tgz_path, 'r:gz') as tgz:
+            tgz.extractall(path=self.base_folder)
+        print('Successful')
+
+    def get_sample(self,nums_row:int):
+        print(f'Get sample {nums_row} rows')
+        sample = pd.read_csv(self.source_csv,nrows=nums_row,header=None)
+        sample.to_csv(self.output_sample_csv,index=False,header=None)
+
+    def runpipeline(self):
+        print('Start run pipeline')
+        self.extract_zip()
+        self.extract_tgz()
+        self.get_sample(nums_row=50000)
+        print('Successful')
+
 
 if __name__ == '__main__':
-    main()
+    extractor = DataExtract()
+    extractor.runpipeline()
