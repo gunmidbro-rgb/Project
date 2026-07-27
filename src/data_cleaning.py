@@ -6,7 +6,6 @@ import contractions
 HTML_TAG_PATTERN = r'<[^>]+>|&[a-zA-Z]+;'
 URL_PATTERN = r'https?://\S+|www\.\S+'
 WHITESPACE_PATTERN = r'\s+'
-ELONGATED_CHAR_PATTERN = r'(.)\1{2,}'
 
 
 class TextCleaner:
