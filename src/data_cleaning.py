@@ -2,11 +2,12 @@ import re
 
 import pandas as pd
 import contractions
+import ftfy
 
 HTML_TAG_PATTERN = r'<[^>]+>|&[a-zA-Z]+;'
 URL_PATTERN = r'https?://\S+|www\.\S+'
 WHITESPACE_PATTERN = r'\s+'
-
+NON_ASCII_PATTERN = r'[^\x00-\x7F]'
 
 class TextCleaner:
     """Cleaning pipeline for the Amazon Reviews polarity dataset."""
@@ -32,6 +33,19 @@ class TextCleaner:
         cleaned = cleaned.str.replace(URL_PATTERN, '', regex=True)
         return cleaned
 
+    def fix_encoding(self, series: pd.Series) -> pd.Series:
+        """Fix mojibake/encoding artifacts and un-curl smart quotes (e.g. don't
+        typed with a curly apostrophe '’') via ftfy, so the straight-apostrophe
+        check in fix_contractions() can actually see them.
+
+        ftfy has no vectorized form, so it is only applied to the subset of rows
+        containing a non-ASCII character instead of every row.
+        """
+        result = series.copy()
+        has_non_ascii = result.str.contains(NON_ASCII_PATTERN, regex=True)
+        result.loc[has_non_ascii] = result.loc[has_non_ascii].apply(ftfy.fix_text)
+        return result
+
     def normalize_whitespace(self, series: pd.Series) -> pd.Series:
         """Collapse newlines/tabs/repeated spaces, lowercase, and strip (vectorized)."""
         cleaned = series.str.replace(WHITESPACE_PATTERN, ' ', regex=True)
@@ -52,6 +66,7 @@ class TextCleaner:
         """Run the full text pipeline on one column: HTML/URL removal, whitespace
         normalization, lowercasing, and contraction expansion."""
         cleaned = self.clean_html_and_urls(series)
+        cleaned = self.fix_encoding(cleaned)
         cleaned = self.normalize_whitespace(cleaned)
         cleaned = self.fix_contractions(cleaned)
         return cleaned
