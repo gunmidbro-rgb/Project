@@ -20,7 +20,7 @@ class DataExtract:
         self.tgz_path = os.path.join(base_folder, "amazon_review_polarity_csv.tgz")
         self.extracted_folder = os.path.join(base_folder, "amazon_review_polarity_csv")
         self.source_csv = os.path.join(self.extracted_folder, "train.csv")
-        self.output_sample_csv = os.path.join(self.extracted_folder, "sample.csv")
+        self.output_sample_csv = os.path.join("data/sample", "sample.csv")
 
     def extract_zip(self) -> None:
         """Extract the inner .tgz archive out of the outer .zip file."""
@@ -62,21 +62,22 @@ class DataExtract:
             raise tarfile.ReadError(f"Corrupted tgz file: {self.tgz_path}") from exc
         logger.info("extract_tgz successful")
 
-    def get_sample(self, nums_row: int) -> None:
-        """Write the first `nums_row` rows of the source CSV to a sample CSV."""
+    def get_sample(self, nums_row: int, random_state: int = 42) -> None:
+        """Write a random sample of `nums_row` rows from the source CSV to a sample CSV."""
         if nums_row <= 0:
             raise ValueError(f"nums_row must be a positive integer, got {nums_row}")
 
         if not os.path.exists(self.source_csv):
             raise FileNotFoundError(f"Source CSV not found: {self.source_csv}")
 
-        logger.info("Get sample: %s rows", nums_row)
+        logger.info("Get sample: %s random rows (random_state=%s)", nums_row, random_state)
         try:
-            # nrows stops parsing after the requested rows, keeping memory usage bounded.
-            sample = pd.read_csv(self.source_csv, nrows=nums_row, header=None)
+            data = pd.read_csv(self.source_csv, header=None)
         except pd.errors.EmptyDataError as exc:
             raise pd.errors.EmptyDataError(f"Source CSV is empty: {self.source_csv}") from exc
 
+        sample = data.sample(n=nums_row, random_state=random_state)
+        os.makedirs(os.path.dirname(self.output_sample_csv), exist_ok=True)
         sample.to_csv(self.output_sample_csv, index=False, header=None)
         logger.info("Sample written to %s", self.output_sample_csv)
 
