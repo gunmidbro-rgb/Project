@@ -33,17 +33,21 @@ class TextCleaner:
         cleaned = cleaned.str.replace(URL_PATTERN, '', regex=True)
         return cleaned
 
-    def fix_encoding(self, series: pd.Series) -> pd.Series:
-        """Fix mojibake/encoding artifacts and un-curl smart quotes (e.g. don't
-        typed with a curly apostrophe '’') via ftfy, so the straight-apostrophe
-        check in fix_contractions() can actually see them.
+    def _safe_fix_encoding(self, text) -> str:
+        """Apply ftfy.fix_text to one row; non-str -> '', errors fall back to original text."""
+        if not isinstance(text, str):
+            return ''
+        try:
+            return ftfy.fix_text(text)
+        except Exception as exc:
+            print(f"Warning: ftfy.fix_text failed on a row ({exc!r}); keeping original text")
+            return text
 
-        ftfy has no vectorized form, so it is only applied to the subset of rows
-        containing a non-ASCII character instead of every row.
-        """
+    def fix_encoding(self, series: pd.Series) -> pd.Series:
+        """Fix mojibake/curly quotes via ftfy on non-ASCII rows only (ftfy isn't vectorized)."""
         result = series.copy()
-        has_non_ascii = result.str.contains(NON_ASCII_PATTERN, regex=True)
-        result.loc[has_non_ascii] = result.loc[has_non_ascii].apply(ftfy.fix_text)
+        has_non_ascii = result.str.contains(NON_ASCII_PATTERN, regex=True).fillna(False)
+        result.loc[has_non_ascii] = result.loc[has_non_ascii].apply(self._safe_fix_encoding)
         return result
 
     def normalize_whitespace(self, series: pd.Series) -> pd.Series:
@@ -51,15 +55,21 @@ class TextCleaner:
         cleaned = series.str.replace(WHITESPACE_PATTERN, ' ', regex=True)
         return cleaned.str.lower().str.strip()
 
-    def fix_contractions(self, series: pd.Series) -> pd.Series:
-        """Expand contractions (e.g. don't -> do not).
+    def _safe_fix_contraction(self, text) -> str:
+        """Apply contractions.fix to one row; non-str -> '', errors fall back to original text."""
+        if not isinstance(text, str):
+            return ''
+        try:
+            return contractions.fix(text)
+        except Exception as exc:
+            print(f"Warning: contractions.fix failed on a row ({exc!r}); keeping original text")
+            return text
 
-        contractions.fix has no vectorized form, so it is only applied to the
-        subset of rows containing an apostrophe instead of every row.
-        """
+    def fix_contractions(self, series: pd.Series) -> pd.Series:
+        """Expand contractions (e.g. don't -> do not) on rows with an apostrophe only (not vectorized)."""
         result = series.copy()
-        has_apostrophe = result.str.contains("'", regex=False)
-        result.loc[has_apostrophe] = result.loc[has_apostrophe].apply(contractions.fix)
+        has_apostrophe = result.str.contains("'", regex=False).fillna(False)
+        result.loc[has_apostrophe] = result.loc[has_apostrophe].apply(self._safe_fix_contraction)
         return result
 
     def clean_text(self, series: pd.Series) -> pd.Series:
