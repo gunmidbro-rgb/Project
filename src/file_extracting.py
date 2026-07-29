@@ -3,6 +3,7 @@ import os
 import tarfile
 import zipfile
 
+import numpy as np
 import pandas as pd
 
 # Basic logging setup so pipeline progress/errors are timestamped and traceable.
@@ -63,7 +64,8 @@ class DataExtract:
         logger.info("extract_tgz successful")
 
     def get_sample(self, nums_row: int, random_state: int = 42) -> None:
-        """Write a random sample of `nums_row` rows from the source CSV to a sample CSV."""
+        """Write a memory-efficient random sample of `nums_row` rows from the source CSV to a sample CSV."""
+        
         if nums_row <= 0:
             raise ValueError(f"nums_row must be a positive integer, got {nums_row}")
 
@@ -72,11 +74,24 @@ class DataExtract:
 
         logger.info("Get sample: %s random rows (random_state=%s)", nums_row, random_state)
         try:
-            data = pd.read_csv(self.source_csv, header=None)
+            total_rows = sum(
+                len(chunk)
+                for chunk in pd.read_csv(
+                    self.source_csv, header=None, usecols=[0], chunksize=100_000
+                )
+            )
         except pd.errors.EmptyDataError as exc:
             raise pd.errors.EmptyDataError(f"Source CSV is empty: {self.source_csv}") from exc
 
-        sample = data.sample(n=nums_row, random_state=random_state)
+        if nums_row > total_rows:
+            raise ValueError(
+                f"nums_row ({nums_row}) must not exceed total rows in source CSV ({total_rows})"
+            )
+
+        rng = np.random.default_rng(random_state)
+        skip_rows = rng.choice(total_rows, size=total_rows - nums_row, replace=False)
+
+        sample = pd.read_csv(self.source_csv, header=None, skiprows=set(skip_rows.tolist()))
         os.makedirs(os.path.dirname(self.output_sample_csv), exist_ok=True)
         sample.to_csv(self.output_sample_csv, index=False, header=None)
         logger.info("Sample written to %s", self.output_sample_csv)
