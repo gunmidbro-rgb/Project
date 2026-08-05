@@ -8,6 +8,8 @@ HTML_TAG_PATTERN = r'<[^>]+>|&[a-zA-Z]+;'
 URL_PATTERN = r'https?://\S+|www\.\S+'
 WHITESPACE_PATTERN = r'\s+'
 NON_ASCII_PATTERN = r'[^\x00-\x7F]'
+ELONGATED_CHAR_PATTERN = r'([a-z])\1{2,}'
+ELONGATED_WORD_PATTERN = r'\b[a-z]*([a-z])\1{2,}[a-z]*\b'
 
 class TextCleaner:
     """Cleaning pipeline for the Amazon Reviews polarity dataset."""
@@ -81,6 +83,15 @@ class TextCleaner:
         cleaned = self.fix_contractions(cleaned)
         return cleaned
 
+    def count_elongated_words(self, series: pd.Series) -> pd.Series:
+        """Count words with 3+ repeated letters (e.g. sooo, goood) — an emphasis/
+        intensity signal for sentiment strength that collapsing would otherwise erase."""
+        return series.str.count(ELONGATED_WORD_PATTERN)
+
+    def collapse_elongated_chars(self, series: pd.Series) -> pd.Series:
+        """Collapse runs of 3+ repeated letters to 2 (sooo -> soo, goood -> good)."""
+        return series.str.replace(ELONGATED_CHAR_PATTERN, r'\1\1', regex=True)
+
     def combine_title_text(self, df: pd.DataFrame) -> pd.Series:
         """Combine title + text into one review-context column."""
         return (df['title'] + ' ' + df['text']).str.strip()
@@ -110,6 +121,9 @@ class TextCleaner:
         data['title'] = self.clean_text(data['title'])
         data['text'] = self.clean_text(data['text'])
         data['review'] = self.combine_title_text(data)
+
+        data['emphasis_count'] = self.count_elongated_words(data['review'])
+        data['review'] = self.collapse_elongated_chars(data['review'])
 
         data = self.drop_duplicates_and_short(data)
 
