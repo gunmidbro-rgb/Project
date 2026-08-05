@@ -35,44 +35,35 @@ class TextCleaner:
         cleaned = cleaned.str.replace(URL_PATTERN, '', regex=True)
         return cleaned
 
-    def _safe_fix_encoding(self, text) -> str:
-        """Apply ftfy.fix_text to one row; non-str -> '', errors fall back to original text."""
-        if not isinstance(text, str):
-            return ''
-        try:
-            return ftfy.fix_text(text)
-        except Exception as exc:
-            print(f"Warning: ftfy.fix_text failed on a row ({exc!r}); keeping original text")
-            return text
+    def _safe_apply(self, series: pd.Series, mask: pd.Series, func, func_name: str) -> pd.Series:
+        """Apply func to rows where mask is True; non-str -> '', errors keep the original text."""
+        def safe_func(text):
+            if not isinstance(text, str):
+                return ''
+            try:
+                return func(text)
+            except Exception as exc:
+                print(f"Warning: {func_name} failed on a row ({exc!r}); keeping original text")
+                return text
+
+        result = series.copy()
+        result.loc[mask] = result.loc[mask].apply(safe_func)
+        return result
 
     def fix_encoding(self, series: pd.Series) -> pd.Series:
         """Fix mojibake/curly quotes via ftfy on non-ASCII rows only (ftfy isn't vectorized)."""
-        result = series.copy()
-        has_non_ascii = result.str.contains(NON_ASCII_PATTERN, regex=True).fillna(False)
-        result.loc[has_non_ascii] = result.loc[has_non_ascii].apply(self._safe_fix_encoding)
-        return result
+        has_non_ascii = series.str.contains(NON_ASCII_PATTERN, regex=True).fillna(False)
+        return self._safe_apply(series, has_non_ascii, ftfy.fix_text, 'ftfy.fix_text')
 
     def normalize_whitespace(self, series: pd.Series) -> pd.Series:
         """Collapse newlines/tabs/repeated spaces, lowercase, and strip (vectorized)."""
         cleaned = series.str.replace(WHITESPACE_PATTERN, ' ', regex=True)
         return cleaned.str.lower().str.strip()
 
-    def _safe_fix_contraction(self, text) -> str:
-        """Apply contractions.fix to one row; non-str -> '', errors fall back to original text."""
-        if not isinstance(text, str):
-            return ''
-        try:
-            return contractions.fix(text)
-        except Exception as exc:
-            print(f"Warning: contractions.fix failed on a row ({exc!r}); keeping original text")
-            return text
-
     def fix_contractions(self, series: pd.Series) -> pd.Series:
         """Expand contractions (e.g. don't -> do not) on rows with an apostrophe only (not vectorized)."""
-        result = series.copy()
-        has_apostrophe = result.str.contains("'", regex=False).fillna(False)
-        result.loc[has_apostrophe] = result.loc[has_apostrophe].apply(self._safe_fix_contraction)
-        return result
+        has_apostrophe = series.str.contains("'", regex=False).fillna(False)
+        return self._safe_apply(series, has_apostrophe, contractions.fix, 'contractions.fix')
 
     def clean_text(self, series: pd.Series) -> pd.Series:
         """Run the full text pipeline on one column: HTML/URL removal, whitespace
@@ -133,3 +124,6 @@ class TextCleaner:
         data.info(memory_usage='deep')
 
         return data
+
+
+    
