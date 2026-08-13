@@ -7,4 +7,9 @@ data/
 #Personal notes
 note.txt
 
+#vscode
+.vscode/
+
+#claude
+.claude/
 
