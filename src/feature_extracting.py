@@ -22,12 +22,11 @@ def extraction(
     via `.transform()` otherwise (test/val set) to avoid data leakage.
     """
     tokens = _as_token_lists(df['tokens'])
+    documents = tokens.apply(' '.join)
 
     if vectorizer is None:
-        vectorizer = TfidfVectorizer(
-            analyzer=lambda x: x, lowercase=False, ngram_range=(1, 2), min_df=5,
-        )
-        X = vectorizer.fit_transform(tokens)
+        vectorizer = TfidfVectorizer(lowercase=False, ngram_range=(1, 2), min_df=5)
+        X = vectorizer.fit_transform(documents)
     else:
-        X = vectorizer.transform(tokens)
+        X = vectorizer.transform(documents)
     return X, vectorizer
